@@ -15,6 +15,7 @@ import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadResult;
 import com.alibaba.sdk.android.oss.model.MultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.OSSRequest;
+import com.alibaba.sdk.android.oss.model.ObjectMetadata;
 import com.alibaba.sdk.android.oss.model.PartETag;
 import com.alibaba.sdk.android.oss.model.UploadPartRequest;
 import com.alibaba.sdk.android.oss.model.UploadPartResult;
@@ -318,12 +319,25 @@ public abstract class BaseMultipartUploadTask<Request extends MultipartUploadReq
 
             CompleteMultipartUploadRequest complete = new CompleteMultipartUploadRequest(
                     mRequest.getBucketName(), mRequest.getObjectKey(), mUploadId, mPartETags);
-            complete.setMetadata(mRequest.getMetadata());
             if (mRequest.getCallbackParam() != null) {
                 complete.setCallbackParam(mRequest.getCallbackParam());
             }
             if (mRequest.getCallbackVars() != null) {
                 complete.setCallbackVars(mRequest.getCallbackVars());
+            }
+            if (mRequest.getMetadata() != null) {
+                ObjectMetadata metadata = new ObjectMetadata();
+                for (String key : mRequest.getMetadata().getRawMetadata().keySet()) {
+                    if (key.startsWith("x-oss")) {
+                        if (key.equals("x-oss-forbid-overwrite") || key.equals("x-oss-complete-all")) {
+                            metadata.setHeader(key, mRequest.getMetadata().getRawMetadata().get(key));
+                        }
+                    } else {
+                        metadata.setHeader(key, mRequest.getMetadata().getRawMetadata().get(key));
+                    }
+                }
+                metadata.setUserMetadata(mRequest.getMetadata().getUserMetadata());
+                complete.setMetadata(metadata);
             }
             complete.setCRC64(mRequest.getCRC64());
             completeResult = mApiOperation.syncCompleteMultipartUpload(complete);
