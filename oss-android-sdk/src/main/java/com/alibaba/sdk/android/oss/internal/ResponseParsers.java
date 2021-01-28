@@ -860,7 +860,6 @@ public final class ResponseParsers {
             serviceException.setPartNumber(partNumber);
         }
 
-
         return serviceException;
     }
 

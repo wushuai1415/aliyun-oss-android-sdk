@@ -10,14 +10,12 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
-import android.support.test.InstrumentationRegistry;
 
 import com.alibaba.sdk.android.oss.ClientException;
 import com.alibaba.sdk.android.oss.ServiceException;
 import com.alibaba.sdk.android.oss.callback.OSSCompletedCallback;
 import com.alibaba.sdk.android.oss.common.OSSConstants;
 import com.alibaba.sdk.android.oss.common.OSSLog;
-import com.alibaba.sdk.android.oss.common.auth.OSSAuthCredentialsProvider;
 import com.alibaba.sdk.android.oss.common.auth.OSSCredentialProvider;
 import com.alibaba.sdk.android.oss.common.auth.OSSCustomSignerCredentialProvider;
 import com.alibaba.sdk.android.oss.common.auth.OSSFederationCredentialProvider;
@@ -40,6 +38,8 @@ import com.alibaba.sdk.android.oss.model.DeleteBucketRequest;
 import com.alibaba.sdk.android.oss.model.DeleteBucketResult;
 import com.alibaba.sdk.android.oss.model.DeleteObjectRequest;
 import com.alibaba.sdk.android.oss.model.DeleteObjectResult;
+import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
+import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
 import com.alibaba.sdk.android.oss.model.GetBucketACLRequest;
 import com.alibaba.sdk.android.oss.model.GetBucketACLResult;
 import com.alibaba.sdk.android.oss.model.GetBucketInfoRequest;
@@ -76,7 +76,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -85,7 +84,7 @@ import java.net.URL;
  */
 public class OSSTestConfig {
 
-    public static final String ENDPOINT = "http://oss-cn-hangzhou.aliyuncs.com";
+    public static final String ENDPOINT = "https://oss-cn-hangzhou.aliyuncs.com";
 
     public static final String EXCLUDE_HOST = "oss-cn-hangzhou.aliyuncs.com";
 
@@ -812,6 +811,26 @@ public class OSSTestConfig {
         public void onFailure(CompleteMultipartUploadRequest request, ClientException clientExcepion, ServiceException serviceException) {
             this.request = request;
             this.clientException = clientExcepion;
+            this.serviceException = serviceException;
+        }
+    }
+
+    public final static class TestMultipartDownloadCallback implements OSSCompletedCallback<MultipartDownloadRequest, MultipartDownloadResult> {
+
+        public MultipartDownloadRequest request;
+        public MultipartDownloadResult result;
+        public ClientException clientException;
+        public ServiceException serviceException;
+        @Override
+        public void onSuccess(MultipartDownloadRequest request, MultipartDownloadResult result) {
+            this.request = request;
+            this.result = result;
+        }
+
+        @Override
+        public void onFailure(MultipartDownloadRequest request, ClientException clientException, ServiceException serviceException) {
+            this.request = request;
+            this.clientException = clientException;
             this.serviceException = serviceException;
         }
     }
