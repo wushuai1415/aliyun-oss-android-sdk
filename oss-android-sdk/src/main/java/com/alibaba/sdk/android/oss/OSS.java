@@ -883,4 +883,5 @@ public interface OSS {
      */
     public OSSAsyncTask<RestoreObjectResult> asyncRestoreObject(RestoreObjectRequest request, OSSCompletedCallback<RestoreObjectRequest, RestoreObjectResult> completedCallback);
 
+    public OSSAsyncTask<MultipartDownloadResult> asyncMultipartDownload(MultipartDownloadRequest request, OSSCompletedCallback<MultipartDownloadRequest, MultipartDownloadResult> completedCallback);
 }
