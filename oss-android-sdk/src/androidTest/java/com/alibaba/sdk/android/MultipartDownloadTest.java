@@ -6,19 +6,24 @@ import com.alibaba.sdk.android.oss.ClientException;
 import com.alibaba.sdk.android.oss.ServiceException;
 import com.alibaba.sdk.android.oss.callback.OSSProgressCallback;
 import com.alibaba.sdk.android.oss.common.OSSLog;
+import com.alibaba.sdk.android.oss.common.utils.CRC64;
 import com.alibaba.sdk.android.oss.internal.OSSAsyncTask;
 import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
 import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
+import com.alibaba.sdk.android.oss.model.OSSRequest;
 import com.alibaba.sdk.android.oss.model.PutObjectRequest;
+import com.alibaba.sdk.android.oss.model.Range;
 
 import org.junit.Test;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class MultipartDownloadTest extends BaseTestCase {
@@ -26,10 +31,11 @@ public class MultipartDownloadTest extends BaseTestCase {
     private static final String MULTIPART_DOWNLOAD_OBJECT_KEY = "multipartDownloadFile";
     private static final String DOWNLOAD_PATH = InstrumentationRegistry.getContext().getFilesDir().getAbsolutePath() + "/file10m";
     private static final String CHECKPOINT_PATH = InstrumentationRegistry.getContext().getFilesDir().getAbsolutePath();
-    private String file10mPath = OSSTestConfig.EXTERNAL_FILE_DIR + "file10m";
+    private String file10mPath = OSSTestConfig.FILE_DIR + "file10m";
 
     @Override
     void initTestData() throws Exception {
+        OSSTestConfig.initLocalFile();
         PutObjectRequest putObjectRequest = new PutObjectRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, file10mPath);
         oss.putObject(putObjectRequest);
     }
@@ -152,20 +158,33 @@ public class MultipartDownloadTest extends BaseTestCase {
         MultipartDownloadRequest request = new MultipartDownloadRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
         request.setEnableCheckPoint(true);
         request.setCheckPointFilePath(CHECKPOINT_PATH);
+        request.setCRC64(OSSRequest.CRC64Config.YES);
+        final AtomicBoolean needCancelled = new AtomicBoolean(false);
         request.setProgressListener(new OSSProgressCallback() {
             @Override
             public void onProgress(Object request, long currentSize, long totalSize) {
                 progress[0] = (int) ((float)currentSize / totalSize);
+                if (currentSize > totalSize / 2) {
+                    needCancelled.set(true);
+                }
             }
         });
         OSSAsyncTask<MultipartDownloadResult> task = oss.asyncMultipartDownload(request, callback);
 
-        Thread.sleep(100);
+        while (!needCancelled.get()) {
+            Thread.sleep(100);
+        }
         task.cancel();
+        task.waitUntilFinished();
+        assertNull(callback.result);
+        assertNotNull(callback.clientException);
+
+        Thread.sleep(1000l);
 
         request = new MultipartDownloadRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
         request.setEnableCheckPoint(true);
         request.setCheckPointFilePath(CHECKPOINT_PATH);
+        request.setCRC64(OSSRequest.CRC64Config.YES);
         request.setProgressListener(new OSSProgressCallback() {
             @Override
             public void onProgress(Object request, long currentSize, long totalSize) {
@@ -189,7 +208,7 @@ public class MultipartDownloadTest extends BaseTestCase {
         Thread.sleep(100);
         task.cancel();
 
-        PutObjectRequest putRequest = new PutObjectRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, OSSTestConfig.EXTERNAL_FILE_DIR + "file1m");
+        PutObjectRequest putRequest = new PutObjectRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, OSSTestConfig.FILE_DIR + "file1m");
         oss.putObject(putRequest);
 
         callback = new OSSTestConfig.TestMultipartDownloadCallback();
@@ -218,6 +237,34 @@ public class MultipartDownloadTest extends BaseTestCase {
 
         MultipartDownloadRequest request = new MultipartDownloadRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
         request.setEnableCheckPoint(true);
+        request.setCheckPointFilePath(CHECKPOINT_PATH);
+        OSSAsyncTask<MultipartDownloadResult> task = oss.asyncMultipartDownload(request, callback);
+        task.waitUntilFinished();
+
+        OSSTestUtils.checkFileMd5(oss, mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
+    }
+
+    @Test
+    public void testMultipartErrorPartSize() throws ClientException, ServiceException, NoSuchAlgorithmException, IOException {
+        OSSTestConfig.TestMultipartDownloadCallback callback = new OSSTestConfig.TestMultipartDownloadCallback();
+
+        MultipartDownloadRequest request = new MultipartDownloadRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
+        request.setPartSize(100);
+        request.setEnableCheckPoint(true);
+        request.setCheckPointFilePath(CHECKPOINT_PATH);
+        OSSAsyncTask<MultipartDownloadResult> task = oss.asyncMultipartDownload(request, callback);
+        task.waitUntilFinished();
+
+        assertTrue(callback.clientException.getMessage().contains("Part size must be greater than or equal to 100KB!"));
+    }
+
+    @Test
+    public void testMultipartDownloadFileOfRange() throws ClientException, ServiceException, NoSuchAlgorithmException, IOException {
+        OSSTestConfig.TestMultipartDownloadCallback callback = new OSSTestConfig.TestMultipartDownloadCallback();
+
+        MultipartDownloadRequest request = new MultipartDownloadRequest(mBucketName, MULTIPART_DOWNLOAD_OBJECT_KEY, DOWNLOAD_PATH);
+        request.setEnableCheckPoint(true);
+        request.setRange(new Range(100, -1));
         request.setCheckPointFilePath(CHECKPOINT_PATH);
         OSSAsyncTask<MultipartDownloadResult> task = oss.asyncMultipartDownload(request, callback);
         task.waitUntilFinished();
