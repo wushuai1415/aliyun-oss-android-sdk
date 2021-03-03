@@ -91,11 +91,8 @@ public class OssService {
         }
 
         OSSLog.logDebug("create GetObjectRequest");
-        Map<String, String> header = new HashMap<>();
-        header.put("Accept-Encoding", "identity");
         GetObjectRequest get = new GetObjectRequest(mBucket, object);
-        get.setRequestHeaders(header);
-//        get.setCRC64(OSSRequest.CRC64Config.YES);
+        get.setCRC64(OSSRequest.CRC64Config.YES);
         get.setProgressListener(new OSSProgressCallback<GetObjectRequest>() {
             @Override
             public void onProgress(GetObjectRequest request, long currentSize, long totalSize) {
@@ -368,9 +365,9 @@ public class OssService {
         });
     }
 
-    public void asyncResumableDownload(String downloadPath) {
+    public void asyncResumableDownload(String object, String downloadPath) {
         Map<String, String> header = new HashMap<>();
-        ResumableDownloadRequest request = new ResumableDownloadRequest(Config.BUCKET_NAME, "landscape-painting1.jpeg", downloadPath + "/landscape-painting.jpeg");
+        ResumableDownloadRequest request = new ResumableDownloadRequest(mBucket, object, downloadPath + "/" + object);
         request.setEnableCheckPoint(true);
 //        request.setRange(new Range(0, 1024 * 1024));
         request.setPartSize(100 * 1024);
@@ -389,22 +386,17 @@ public class OssService {
                 mDisplayer.displayInfo("上传进度: " + String.valueOf(progress) + "%");
             }
         });
-        final long start = System.currentTimeMillis();
         final OSSAsyncTask task = mOss.asyncResumableDownload(request, new OSSCompletedCallback<ResumableDownloadRequest, ResumableDownloadResult>() {
             @Override
             public void onSuccess(ResumableDownloadRequest request, ResumableDownloadResult result) {
                 Log.i("MultipartDownload", result.getMetadata().toString());
-                long time = System.currentTimeMillis() - start;
-                Log.i("time", time + "");
             }
 
             @Override
             public void onFailure(ResumableDownloadRequest request, ClientException clientException, ServiceException serviceException) {
                 if (clientException != null) {
                     clientException.printStackTrace();
-                    Log.i("clientException", "clientException");
                 } else if (serviceException != null) {
-                    Log.i("serviceException", "serviceException");
                     serviceException.printStackTrace();
                 }
             }

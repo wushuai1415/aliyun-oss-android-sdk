@@ -353,7 +353,9 @@ public class MainActivity extends AppCompatActivity {
         multipartDownloadButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mService.asyncResumableDownload(filePath);
+                EditText editText = (EditText) findViewById(R.id.edit_text);
+                String objectName = editText.getText().toString();
+                mService.asyncResumableDownload(objectName, filePath);
             }
         });
 
