@@ -18,6 +18,12 @@ Github地址：https://github.com/aliyun/aliyun-oss-android-sdk
 更新日志:
 
 2020/10/12
+- release 2.9.6
+1. Added the function of resumable downloading
+2. Fix the problem of wrong permissions when setting up multipart upload
+3. The revised document is consistent with the official website document
+
+2020/10/12
 - release 2.9.5
 1. 新增通过Uri参数上传
 2. 修改主线程初始化异常问题
