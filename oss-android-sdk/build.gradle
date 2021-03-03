@@ -64,14 +64,15 @@ task releaseJar(type: Copy, dependsOn: build) {
     rename('classes.jar', 'aliyun-oss-sdk-android-' + android.defaultConfig.versionName + '.jar')
 }
 
-//源代码路径
+// Source code path
 def coverageSourceDirs = [
         './src/main/java',
 ]
-//class文件路径
+// class file path
 def coverageClassDirs = [
         './build/intermediates/javac/debug/compileDebugJavaWithJavac/classes',
 ]
+
 task jacocoTestReport(type: JacocoReport) {
     group = "Reporting"
     description = "Generate Jacoco coverage reports after running tests."
@@ -79,18 +80,18 @@ task jacocoTestReport(type: JacocoReport) {
         xml.enabled = true
         html.enabled = true
     }
-    // 生成最终的class文件集合
+    // Generate the final class file collection
     classDirectories = files(files(coverageClassDirs).files.collect {
         fileTree(dir: it,
-                // 过滤不需要统计的class文件
+                // Filter class files that do not require statistics
                 excludes: ['**/R.class',
                            '**/R$*.class',
                            '**/Manifest*.*'])
     })
 
-    // 源码目录路径
+    // Source directory path
     sourceDirectories = files(coverageSourceDirs)
-    //覆盖率ec文件路径
+    // Coverage ec file path
     executionData = fileTree(dir:'./build/outputs/code-coverage/connected/')
 
     doFirst {
