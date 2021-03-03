@@ -12,12 +12,12 @@ import com.alibaba.sdk.android.oss.common.utils.BinaryUtil;
 import com.alibaba.sdk.android.oss.common.utils.CRC64;
 import com.alibaba.sdk.android.oss.common.utils.OSSUtils;
 import com.alibaba.sdk.android.oss.exception.InconsistentException;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadResult;
 import com.alibaba.sdk.android.oss.model.GetObjectRequest;
 import com.alibaba.sdk.android.oss.model.GetObjectResult;
 import com.alibaba.sdk.android.oss.model.HeadObjectRequest;
 import com.alibaba.sdk.android.oss.model.HeadObjectResult;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadRequest;
 import com.alibaba.sdk.android.oss.model.OSSRequest;
 import com.alibaba.sdk.android.oss.model.OSSResult;
 import com.alibaba.sdk.android.oss.model.ObjectMetadata;
@@ -47,8 +47,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CheckedInputStream;
 
-public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
-        Result extends MultipartDownloadResult> implements Callable<Result> {
+public class ResumableDownloadTask<Requst extends ResumableDownloadRequest,
+        Result extends ResumableDownloadResult> implements Callable<Result> {
     protected final int CPU_SIZE = Runtime.getRuntime().availableProcessors() * 2;
     protected final int MAX_CORE_POOL_SIZE = CPU_SIZE < 5 ? CPU_SIZE : 5;
     protected final int MAX_IMUM_POOL_SIZE = CPU_SIZE;
@@ -62,7 +62,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
                     return new Thread(runnable, "oss-android-multipart-thread");
                 }
             });
-    private MultipartDownloadRequest mRequest;
+    private ResumableDownloadRequest mRequest;
     private InternalRequestOperation mOperation;
     private OSSCompletedCallback mCompletedCallback;
     private ExecutionContext mContext;
@@ -75,8 +75,8 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
     protected long mPartExceptionCount;
     protected String checkpointPath;
 
-    MultipartDownloadTask(InternalRequestOperation operation,
-                          MultipartDownloadRequest request,
+    ResumableDownloadTask(InternalRequestOperation operation,
+                          ResumableDownloadRequest request,
                           OSSCompletedCallback completedCallback,
                           ExecutionContext context) {
         this.mRequest = request;
@@ -91,7 +91,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
     public Result call() throws Exception {
         try {
             checkInitData();
-            MultipartDownloadResult result = doMultipartDownload();
+            ResumableDownloadResult result = doMultipartDownload();
             if (mCompletedCallback != null) {
                 mCompletedCallback.onSuccess(mRequest, result);
             }
@@ -115,11 +115,11 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
         }
     }
 
-    protected void checkInitData() throws ClientException, ServiceException {
+    protected void checkInitData() throws ClientException, ServiceException, IOException {
 
-        if (mRequest.getPartSize() < 102400) {
-            throw new ClientException("Part size must be greater than or equal to 100KB!");
-        }
+        if (mRequest.getRange() != null && !mRequest.getRange().checkIsValid()) {
+            throw new ClientException("Range is invalid");
+        };
         String recordFileName = BinaryUtil.calculateMd5Str((mRequest.getBucketName() + mRequest.getObjectKey()
                 + String.valueOf(mRequest.getPartSize()) + (mRequest.getCRC64() == OSSRequest.CRC64Config.YES ? "-crc64" : "")).getBytes());
         checkpointPath = mRequest.getCheckPointFilePath() + File.separator + recordFileName;
@@ -137,16 +137,10 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
                 removeFile(checkpointPath);
                 removeFile(mRequest.getTempFilePath());
 
-                mCheckPoint.bucketName = mRequest.getBucketName();
-                mCheckPoint.objectKey = mRequest.getObjectKey();
-                mCheckPoint.fileStat = FileStat.getFileStat(mOperation, mRequest.getBucketName(), mRequest.getObjectKey());
-                mCheckPoint.parts = splitFile(mRequest.getRange(), mCheckPoint.fileStat.fileLength, mRequest.getPartSize());
+                initCheckPoint();
             }
         } else {
-            mCheckPoint.bucketName = mRequest.getBucketName();
-            mCheckPoint.objectKey = mRequest.getObjectKey();
-            mCheckPoint.fileStat = FileStat.getFileStat(mOperation, mRequest.getBucketName(), mRequest.getObjectKey());
-            mCheckPoint.parts = splitFile(mRequest.getRange(), mCheckPoint.fileStat.fileLength, mRequest.getPartSize());
+            initCheckPoint();
         }
     }
 
@@ -161,10 +155,21 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
         return flag;
     }
 
-    protected MultipartDownloadResult doMultipartDownload() throws ClientException, ServiceException, IOException, InterruptedException {
+    private void initCheckPoint() throws ClientException, ServiceException, IOException {
+        FileStat fileStat = FileStat.getFileStat(mOperation, mRequest.getBucketName(), mRequest.getObjectKey());
+        Range range = correctRange(mRequest.getRange(), fileStat.fileLength);
+        long downloadSize = range.getEnd() - range.getBegin();
+        createFile(mRequest.getTempFilePath(), downloadSize);
+
+        mCheckPoint.bucketName = mRequest.getBucketName();
+        mCheckPoint.objectKey = mRequest.getObjectKey();
+        mCheckPoint.fileStat = fileStat;
+        mCheckPoint.parts = splitFile(range, mCheckPoint.fileStat.fileLength, mRequest.getPartSize());
+    }
+
+    protected ResumableDownloadResult doMultipartDownload() throws ClientException, ServiceException, IOException, InterruptedException {
         checkCancel();
-        createFile(mRequest.getTempFilePath(), mCheckPoint.fileStat.fileLength);
-        MultipartDownloadResult multipartDownloadResult = new MultipartDownloadResult();
+        ResumableDownloadResult resumableDownloadResult = new ResumableDownloadResult();
 
         final DownloadFileResult result = new DownloadFileResult();
         result.partResults = new ArrayList<DownloadPartResult>();
@@ -192,7 +197,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
                 completedPartSize += 1;
             }
         }
-        // 等待所有任务全部完成
+        // Wait for all tasks to be completed
         if (checkWaitCondition(mCheckPoint.parts.size())) {
             synchronized (mLock) {
                 mLock.wait();
@@ -207,7 +212,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
         });
         if (mRequest.getCRC64() == OSSRequest.CRC64Config.YES && mRequest.getRange() == null) {
             Long clientCRC = calcObjectCRCFromParts(result.partResults);
-            multipartDownloadResult.setClientCRC(clientCRC);
+            resumableDownloadResult.setClientCRC(clientCRC);
             try {
                 OSSUtils.checkChecksum(clientCRC, mCheckPoint.fileStat.serverCRC, result.partResults.get(0).requestId);
             } catch (InconsistentException e) {
@@ -217,16 +222,17 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
             }
         }
         removeFile(checkpointPath);
+
         File fromFile = new File(mRequest.getTempFilePath());
         File toFile = new File(mRequest.getDownloadToFilePath());
         moveFile(fromFile, toFile);
 
-        multipartDownloadResult.setServerCRC(mCheckPoint.fileStat.serverCRC);
-        multipartDownloadResult.setMetadata(result.metadata);
-        multipartDownloadResult.setRequestId(result.partResults.get(0).requestId);
-        multipartDownloadResult.setStatusCode(200);
+        resumableDownloadResult.setServerCRC(mCheckPoint.fileStat.serverCRC);
+        resumableDownloadResult.setMetadata(result.metadata);
+        resumableDownloadResult.setRequestId(result.partResults.get(0).requestId);
+        resumableDownloadResult.setStatusCode(200);
 
-        return multipartDownloadResult;
+        return resumableDownloadResult;
     }
 
     private static Long calcObjectCRCFromParts(List<DownloadPartResult> partResults) {
@@ -254,9 +260,8 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
             parts.add(part);
             return parts;
         }
-        Range realRange = correctRange(range, fileSize);
-        long start = realRange.getBegin();
-        long size = realRange.getEnd() - realRange.getBegin();
+        long start = range.getBegin();
+        long size = range.getEnd() - range.getBegin();
 
         long count = size / partSize;
         if (size % partSize > 0) {
@@ -274,6 +279,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
                 part.length = start + size - part.start;
             }
             part.partNumber = i;
+            part.fileStart = i * partSize;
             parts.add(part);
         }
         return parts;
@@ -284,12 +290,11 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
         long size = totalSize;
         if (range != null) {
             start = range.getBegin();
-            if (start < 0) {
+            if (range.getBegin() == -1) {
                 start = 0;
             }
-
             size = range.getEnd() - range.getBegin();
-            if (range.getBegin() < start) {
+            if (range.getEnd() == -1) {
                 size = totalSize - start;
             }
         }
@@ -309,7 +314,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
             downloadPartSize += 1;
 
             output = new RandomAccessFile(mRequest.getTempFilePath(), "rw");
-            output.seek(part.start);
+            output.seek(part.fileStart);
 
             Map<String, String> requestHeader = mRequest.getRequestHeader();
 
@@ -350,12 +355,12 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
                 completedPartSize += 1;
 
                 if (mContext.getCancellationHandler().isCancelled()) {
-                    // 最后一个任务完成后取消
+                    // Cancel after the last task is completed
                     if (downloadPartSize == completedPartSize - mPartExceptionCount) {
                         checkCancel();
                     }
                 } else {
-                    // 所有任务完成后唤醒doMultipartDownload方法所在线程
+                    // After all tasks are completed, wake up the thread where the doMultipartDownload method is located
                     if (mCheckPoint.parts.size() == (completedPartSize - mPartExceptionCount)) {
                         notifyMultipartThread();
                     }
@@ -473,7 +478,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
 
     protected void checkCancel() throws ClientException {
         if (mContext.getCancellationHandler().isCancelled()) {
-            TaskCancelException e = new TaskCancelException("multipartDownload cancel");
+            TaskCancelException e = new TaskCancelException("Resumable download cancel");
             throw new ClientException(e.getMessage(), e, true);
         }
     }
@@ -492,6 +497,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
         public long end; // end index;
         public boolean isCompleted; // flag of part download finished or not;
         public long length; // length of part
+        public long fileStart; // start index of file
         public long crc; // part crc.
 
         @Override
@@ -557,7 +563,7 @@ public class MultipartDownloadTask<Requst extends MultipartDownloadRequest,
          * Check if the object matches the checkpoint information.
          */
         public synchronized boolean isValid(InternalRequestOperation operation) throws ClientException, ServiceException {
-            // 比较checkpoint的magic和md5
+            // Compare magic and md5 of checkpoint
             if (this.md5 != hashCode()) {
                 return false;
             }

@@ -40,8 +40,8 @@ import com.alibaba.sdk.android.oss.model.DeleteBucketRequest;
 import com.alibaba.sdk.android.oss.model.DeleteBucketResult;
 import com.alibaba.sdk.android.oss.model.DeleteObjectRequest;
 import com.alibaba.sdk.android.oss.model.DeleteObjectResult;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadRequest;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadResult;
 import com.alibaba.sdk.android.oss.model.GetBucketACLRequest;
 import com.alibaba.sdk.android.oss.model.GetBucketACLResult;
 import com.alibaba.sdk.android.oss.model.GetBucketInfoRequest;
@@ -822,20 +822,20 @@ public class OSSTestConfig {
         }
     }
 
-    public final static class TestMultipartDownloadCallback implements OSSCompletedCallback<MultipartDownloadRequest, MultipartDownloadResult> {
+    public final static class TestResumableDownloadCallback implements OSSCompletedCallback<ResumableDownloadRequest, ResumableDownloadResult> {
 
-        public MultipartDownloadRequest request;
-        public MultipartDownloadResult result;
+        public ResumableDownloadRequest request;
+        public ResumableDownloadResult result;
         public ClientException clientException;
         public ServiceException serviceException;
         @Override
-        public void onSuccess(MultipartDownloadRequest request, MultipartDownloadResult result) {
+        public void onSuccess(ResumableDownloadRequest request, ResumableDownloadResult result) {
             this.request = request;
             this.result = result;
         }
 
         @Override
-        public void onFailure(MultipartDownloadRequest request, ClientException clientException, ServiceException serviceException) {
+        public void onFailure(ResumableDownloadRequest request, ClientException clientException, ServiceException serviceException) {
             this.request = request;
             this.clientException = clientException;
             this.serviceException = serviceException;

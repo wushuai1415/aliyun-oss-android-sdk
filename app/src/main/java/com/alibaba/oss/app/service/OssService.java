@@ -18,7 +18,7 @@ import com.alibaba.sdk.android.oss.common.auth.OSSCustomSignerCredentialProvider
 import com.alibaba.sdk.android.oss.common.auth.OSSPlainTextAKSKCredentialProvider;
 import com.alibaba.sdk.android.oss.common.utils.OSSUtils;
 import com.alibaba.sdk.android.oss.internal.OSSAsyncTask;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadResult;
 import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadResult;
 import com.alibaba.sdk.android.oss.model.CreateBucketRequest;
 import com.alibaba.sdk.android.oss.model.DeleteBucketRequest;
@@ -32,7 +32,7 @@ import com.alibaba.sdk.android.oss.model.ImagePersistRequest;
 import com.alibaba.sdk.android.oss.model.ImagePersistResult;
 import com.alibaba.sdk.android.oss.model.ListObjectsRequest;
 import com.alibaba.sdk.android.oss.model.ListObjectsResult;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadRequest;
 import com.alibaba.sdk.android.oss.model.MultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.OSSRequest;
 import com.alibaba.sdk.android.oss.model.PutObjectRequest;
@@ -91,8 +91,11 @@ public class OssService {
         }
 
         OSSLog.logDebug("create GetObjectRequest");
+        Map<String, String> header = new HashMap<>();
+        header.put("Accept-Encoding", "identity");
         GetObjectRequest get = new GetObjectRequest(mBucket, object);
-        get.setCRC64(OSSRequest.CRC64Config.YES);
+        get.setRequestHeaders(header);
+//        get.setCRC64(OSSRequest.CRC64Config.YES);
         get.setProgressListener(new OSSProgressCallback<GetObjectRequest>() {
             @Override
             public void onProgress(GetObjectRequest request, long currentSize, long totalSize) {
@@ -365,9 +368,9 @@ public class OssService {
         });
     }
 
-    public void asyncMultipartDownload(String downloadPath) {
+    public void asyncResumableDownload(String downloadPath) {
         Map<String, String> header = new HashMap<>();
-        MultipartDownloadRequest request = new MultipartDownloadRequest(Config.BUCKET_NAME, "landscape-painting1.jpeg", downloadPath + "/landscape-painting.jpeg");
+        ResumableDownloadRequest request = new ResumableDownloadRequest(Config.BUCKET_NAME, "landscape-painting1.jpeg", downloadPath + "/landscape-painting.jpeg");
         request.setEnableCheckPoint(true);
 //        request.setRange(new Range(0, 1024 * 1024));
         request.setPartSize(100 * 1024);
@@ -387,16 +390,16 @@ public class OssService {
             }
         });
         final long start = System.currentTimeMillis();
-        final OSSAsyncTask task = mOss.asyncMultipartDownload(request, new OSSCompletedCallback<MultipartDownloadRequest, MultipartDownloadResult>() {
+        final OSSAsyncTask task = mOss.asyncResumableDownload(request, new OSSCompletedCallback<ResumableDownloadRequest, ResumableDownloadResult>() {
             @Override
-            public void onSuccess(MultipartDownloadRequest request, MultipartDownloadResult result) {
+            public void onSuccess(ResumableDownloadRequest request, ResumableDownloadResult result) {
                 Log.i("MultipartDownload", result.getMetadata().toString());
                 long time = System.currentTimeMillis() - start;
                 Log.i("time", time + "");
             }
 
             @Override
-            public void onFailure(MultipartDownloadRequest request, ClientException clientException, ServiceException serviceException) {
+            public void onFailure(ResumableDownloadRequest request, ClientException clientException, ServiceException serviceException) {
                 if (clientException != null) {
                     clientException.printStackTrace();
                     Log.i("clientException", "clientException");

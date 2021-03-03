@@ -353,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
         multipartDownloadButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mService.asyncMultipartDownload(filePath);
+                mService.asyncResumableDownload(filePath);
             }
         });
 

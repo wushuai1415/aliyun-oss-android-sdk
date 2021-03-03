@@ -21,7 +21,7 @@ import com.alibaba.sdk.android.oss.model.AbortMultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.AbortMultipartUploadResult;
 import com.alibaba.sdk.android.oss.model.AppendObjectRequest;
 import com.alibaba.sdk.android.oss.model.AppendObjectResult;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadResult;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadResult;
 import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.CompleteMultipartUploadResult;
 import com.alibaba.sdk.android.oss.model.CopyObjectRequest;
@@ -69,7 +69,7 @@ import com.alibaba.sdk.android.oss.model.ListObjectsRequest;
 import com.alibaba.sdk.android.oss.model.ListObjectsResult;
 import com.alibaba.sdk.android.oss.model.ListPartsRequest;
 import com.alibaba.sdk.android.oss.model.ListPartsResult;
-import com.alibaba.sdk.android.oss.model.MultipartDownloadRequest;
+import com.alibaba.sdk.android.oss.model.ResumableDownloadRequest;
 import com.alibaba.sdk.android.oss.model.MultipartUploadRequest;
 import com.alibaba.sdk.android.oss.model.PutBucketLifecycleRequest;
 import com.alibaba.sdk.android.oss.model.PutBucketLifecycleResult;
@@ -627,8 +627,13 @@ class OSSImpl implements OSS {
     }
 
     @Override
-    public OSSAsyncTask<MultipartDownloadResult> asyncMultipartDownload(MultipartDownloadRequest request, OSSCompletedCallback<MultipartDownloadRequest, MultipartDownloadResult> completedCallback) {
-        return extensionRequestOperation.multipartDownload(request, completedCallback);
+    public OSSAsyncTask<ResumableDownloadResult> asyncResumableDownload(ResumableDownloadRequest request, OSSCompletedCallback<ResumableDownloadRequest, ResumableDownloadResult> completedCallback) {
+        return extensionRequestOperation.resumableDownload(request, completedCallback);
+    }
+
+    @Override
+    public ResumableDownloadResult syncResumableDownload(ResumableDownloadRequest request) throws ClientException, ServiceException {
+        return extensionRequestOperation.resumableDownload(request, null).getResult();
     }
 
 }
